@@ -2138,12 +2138,12 @@ class TranslationUnit(ClangObject):
         if len(unsaved_files):
             unsaved_files_array = (_CXUnsavedFile * len(unsaved_files))()
             for i,(name,value) in enumerate(unsaved_files):
-                if not isinstance(value, str):
+                if not isinstance(value, bytes):
                     # FIXME: It would be great to support an efficient version
                     # of this, one day.
                     value = value.read()
                     print(value)
-                if not isinstance(value, str):
+                if not isinstance(value, bytes):
                     raise TypeError('Unexpected unsaved file contents.')
                 unsaved_files_array[i].name = name
                 unsaved_files_array[i].contents = value
@@ -2202,12 +2202,12 @@ class TranslationUnit(ClangObject):
         if len(unsaved_files):
             unsaved_files_array = (_CXUnsavedFile * len(unsaved_files))()
             for i,(name,value) in enumerate(unsaved_files):
-                if not isinstance(value, str):
+                if not isinstance(value, bytes):
                     # FIXME: It would be great to support an efficient version
                     # of this, one day.
                     value = value.read()
                     print(value)
-                if not isinstance(value, str):
+                if not isinstance(value, bytes):
                     raise TypeError('Unexpected unsaved file contents.')
                 unsaved_files_array[i].name = name
                 unsaved_files_array[i].contents = value
