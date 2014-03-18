@@ -1438,7 +1438,10 @@ class Type(Structure):
     def kind(self):
         """Return the kind of this type."""
         return TypeKind.from_id(self._kind_id)
-
+    @property
+    def spelling(self):
+        return conf.lib.clang_getTypeSpelling(self)
+        
     def argument_types(self):
         """Retrieve a container for the non-variadic arguments for this type.
 
@@ -2455,6 +2458,11 @@ callbacks['cursor_visit'] = CFUNCTYPE(c_int, Cursor, Cursor, py_object)
 
 # Functions strictly alphabetical order.
 functionList = [
+    ('clang_getTypeSpelling',
+    [Type],
+    _CXString,
+    _CXString.from_result),
+
   ("clang_annotateTokens",
    [TranslationUnit, POINTER(Token), c_uint, POINTER(Cursor)]),
 
