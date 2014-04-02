@@ -75,6 +75,12 @@ c_object_p = POINTER(c_void_p)
 
 callbacks = {}
 
+def ustr(s):
+    if isinstance(s, bytes):
+        return s.decode()
+    else:
+        return str(s)
+
 ### Exception Classes ###
 
 class TranslationUnitLoadError(Exception):
@@ -155,7 +161,7 @@ class _CXString(Structure):
     @staticmethod
     def from_result(res, fn, args):
         assert isinstance(res, _CXString)
-        return conf.lib.clang_getCString(res)
+        return ustr(conf.lib.clang_getCString(res))
 
 class SourceLocation(Structure):
     """
@@ -1038,6 +1044,7 @@ CursorKind.INCLUSION_DIRECTIVE = CursorKind(503)
 
 ### Cursors ###
 
+
 class Cursor(Structure):
     """
     The Cursor class represents a reference to an element within the AST. It
@@ -1045,13 +1052,18 @@ class Cursor(Structure):
     """
     _fields_ = [("_kind_id", c_int), ("xdata", c_int), ("data", c_void_p * 3)]
 
-    @staticmethod
-    def from_location(tu, location):
+
+    @classmethod
+    def from_location(cls, tu, location):
+        '''
+        Get the cursor located at the given location.
+        
+        :rtype: clang.cindex.Cursor
+        '''
         # We store a reference to the TU in the instance so the TU won't get
         # collected before the cursor.
         cursor = conf.lib.clang_getCursor(tu, location)
         cursor._tu = tu
-
         return cursor
 
     def __eq__(self, other):
@@ -1078,6 +1090,8 @@ class Cursor(Structure):
         If the cursor is a reference to a declaration or a declaration of
         some entity, return a cursor that points to the definition of that
         entity.
+        
+        :rtype: clang.cindex.Cursor
         """
         # TODO: Should probably check that this is either a reference or
         # declaration prior to issuing the lookup.
@@ -1091,9 +1105,19 @@ class Cursor(Structure):
         particular entity (function, class, variable, etc.) within a
         program. USRs can be compared across translation units to determine,
         e.g., when references in one translation refer to an entity defined in
-        another translation unit."""
+        another translation unit.
+        :rtype: str
+        """
         return conf.lib.clang_getCursorUSR(self)
 
+    @property
+    def usr(self):
+        return self.get_usr()
+    
+    @property
+    def definition(self):
+        return self.get_definition()
+    
     @property
     def kind(self):
         """Return the kind of this cursor."""
@@ -1119,6 +1143,8 @@ class Cursor(Structure):
         The display name contains extra information that helps identify the cursor,
         such as the parameters of a function or template or the arguments of a
         class template specialization.
+        
+        :rtype: str
         """
         if not hasattr(self, '_displayname'):
             self._displayname = conf.lib.clang_getCursorDisplayName(self)
@@ -1130,6 +1156,8 @@ class Cursor(Structure):
         """
         Return the source location (the starting character) of the entity
         pointed at by the cursor.
+        
+        :rtype: SourceLocation
         """
         if not hasattr(self, '_loc'):
             self._loc = conf.lib.clang_getCursorLocation(self)
@@ -1141,6 +1169,8 @@ class Cursor(Structure):
         """
         Return the source range (the range of text) occupied by the entity
         pointed at by the cursor.
+        
+        :rtype: SourceRange
         """
         if not hasattr(self, '_extent'):
             self._extent = conf.lib.clang_getCursorExtent(self)
@@ -1151,6 +1181,8 @@ class Cursor(Structure):
     def type(self):
         """
         Retrieve the Type (if any) of the entity pointed at by the cursor.
+        
+        :rtype: Type
         """
         if not hasattr(self, '_type'):
             self._type = conf.lib.clang_getCursorType(self)
@@ -1165,6 +1197,8 @@ class Cursor(Structure):
         underlying entity. For example, if you have multiple forward
         declarations for the same class, the canonical cursor for the forward
         declarations will be identical.
+        
+        :rtype: clang.cindex.Cursor
         """
         if not hasattr(self, '_canonical'):
             self._canonical = conf.lib.clang_getCanonicalCursor(self)
@@ -1173,7 +1207,11 @@ class Cursor(Structure):
 
     @property
     def result_type(self):
-        """Retrieve the Type of the result for this Cursor."""
+        """
+        Retrieve the Type of the result for this Cursor.
+        
+        :rtype: Type
+        """
         if not hasattr(self, '_result_type'):
             self._result_type = conf.lib.clang_getResultType(self.type)
 
@@ -1185,6 +1223,8 @@ class Cursor(Structure):
 
         Returns a Type for the typedef this cursor is a declaration for. If
         the current cursor is not a typedef, this raises.
+        
+        :rtype: Type
         """
         if not hasattr(self, '_underlying_type'):
             assert self.kind.is_declaration()
@@ -1199,6 +1239,8 @@ class Cursor(Structure):
 
         Returns a Type corresponding to an integer. If the cursor is not for an
         enum, this raises.
+        
+        :rtype: Type
         """
         if not hasattr(self, '_enum_type'):
             assert self.kind == CursorKind.ENUM_DECL
@@ -1250,7 +1292,11 @@ class Cursor(Structure):
 
     @property
     def semantic_parent(self):
-        """Return the semantic parent for this cursor."""
+        """
+        Return the semantic parent for this cursor.
+        
+        :rtype: Cursor
+        """
         if not hasattr(self, '_semantic_parent'):
             self._semantic_parent = conf.lib.clang_getCursorSemanticParent(self)
 
@@ -1258,7 +1304,11 @@ class Cursor(Structure):
 
     @property
     def lexical_parent(self):
-        """Return the lexical parent for this cursor."""
+        """
+        Return the lexical parent for this cursor.
+        
+        :rtype: Cursor
+        """
         if not hasattr(self, '_lexical_parent'):
             self._lexical_parent = conf.lib.clang_getCursorLexicalParent(self)
 
@@ -1266,10 +1316,31 @@ class Cursor(Structure):
 
     @property
     def translation_unit(self):
-        """Returns the TranslationUnit to which this Cursor belongs."""
+        """
+        Returns the TranslationUnit to which this Cursor belongs.
+        
+        :rtype: Cursor
+        """
         # If this triggers an AttributeError, the instance was not properly
         # created.
         return self._tu
+        
+    @property
+    def referenced_cursor(self):
+        '''
+        For a cursor that is a reference, retrieve a cursor representing
+        the entity that it references.
+
+        Reference cursors refer to other entities in the AST. For example, 
+        an Objective-C superclass reference cursor refers to an Objective-C class. 
+        This function produces the cursor for the Objective-C class from the cursor 
+        for the superclass reference. If the input cursor is a declaration or definition, 
+        it returns that declaration or definition unchanged. Otherwise, returns the NULL cursor.
+        
+        :rtype: clang.cindex.Cursor
+        '''
+        return conf.lib.clang_getCursorReferenced(self)
+        
 
     def get_arguments(self):
         """Return an iterator for accessing the arguments of this cursor."""
@@ -1657,7 +1728,7 @@ class CompletionChunk:
 
     @CachedProperty
     def spelling(self):
-        return conf.lib.clang_getCompletionChunkText(self.cs, self.key).spelling
+        return ustr(conf.lib.clang_getCompletionChunkText(self.cs, self.key).spelling)
 
     @CachedProperty
     def kind(self):
@@ -1751,10 +1822,10 @@ class CompletionString(ClangObject):
         return _CXString()
 
     def __repr__(self):
-        return " | ".join([str(a) for a in self]) \
-               + " || Priority: " + str(self.priority) \
-               + " || Availability: " + str(self.availability) \
-               + " || Brief comment: " + str(self.briefComment.spelling)
+        return " | ".join([ustr(a) for a in self]) \
+               + " || Priority: " + ustr(self.priority) \
+               + " || Availability: " + ustr(self.availability) \
+               + " || Brief comment: " + ustr(self.briefComment.spelling)
 
 availabilityKinds = {
             0: CompletionChunk.Kind("Available"),
